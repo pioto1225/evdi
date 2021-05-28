@@ -1,0 +1,101 @@
+diff --git a/src/backends/native/meta-drm-buffer-import.c b/src/backends/native/meta-drm-buffer-import.c
+index b9d0e21..a1ee661 100644
+--- a/src/backends/native/meta-drm-buffer-import.c
++++ b/src/backends/native/meta-drm-buffer-import.c
+@@ -156,7 +156,7 @@ meta_drm_buffer_import_new (MetaGpuKms        *gpu_kms,
+   return buffer_import;
+ }
+ 
+-static uint32_t
++uint32_t
+ meta_drm_buffer_import_get_fb_id (MetaDrmBuffer *buffer)
+ {
+   return META_DRM_BUFFER_IMPORT (buffer)->fb_id;
+diff --git a/src/backends/native/meta-drm-buffer-import.h b/src/backends/native/meta-drm-buffer-import.h
+index 2c0962e..3325855 100644
+--- a/src/backends/native/meta-drm-buffer-import.h
++++ b/src/backends/native/meta-drm-buffer-import.h
+@@ -51,4 +51,5 @@ MetaDrmBufferImport * meta_drm_buffer_import_new (MetaGpuKms        *gpu_kms,
+                                                   MetaDrmBufferGbm  *buffer_gbm,
+                                                   GError           **error);
+ 
++uint32_t meta_drm_buffer_import_get_fb_id (MetaDrmBuffer *buffer); 
+ #endif /* META_DRM_BUFFER_IMPORT_H */
+diff --git a/src/backends/native/meta-renderer-native.c b/src/backends/native/meta-renderer-native.c
+index d1d7130..c0779c2 100644
+--- a/src/backends/native/meta-renderer-native.c
++++ b/src/backends/native/meta-renderer-native.c
+@@ -48,6 +48,7 @@
+ #include <sys/mman.h>
+ #include <unistd.h>
+ #include <xf86drm.h>
++#include <sys/ioctl.h>
+ 
+ #include "backends/meta-backend-private.h"
+ #include "backends/meta-crtc.h"
+@@ -2012,6 +2013,57 @@ retry:
+     }
+ }
+ 
++static void update_secondary_gpu_state_with_damage(MetaOnscreenNativeSecondaryGpuState *secondary_gpu_state, 
++                                                   const int                           *rectangles, 
++                                                   int                                 n_rectangles)
++{
++  struct drm_mode_fb_dirty_cmd cmd;
++  struct drm_clip_rect *rects = NULL;
++  int ret = 0;
++  int fd = 0;
++  int i;
++
++  memset(&cmd, 0, sizeof(struct drm_mode_fb_dirty_cmd));
++
++  if (secondary_gpu_state && n_rectangles)
++    {
++      cmd.flags = DRM_MODE_FB_DIRTY_ANNOTATE_FILL;
++      cmd.num_clips = n_rectangles;
++      if (secondary_gpu_state->import_status == META_SHARED_FRAMEBUFFER_IMPORT_STATUS_OK)
++        {
++          cmd.fb_id = meta_drm_buffer_import_get_fb_id (secondary_gpu_state->gbm.current_fb);
++        } 
++      else if (secondary_gpu_state->noted_primary_gpu_copy_ok == TRUE)
++        {
++          cmd.fb_id = secondary_gpu_state->cpu.dumb_fb->fb_id; 
++        }
++     
++      rects = malloc(n_rectangles * sizeof(struct drm_clip_rect));
++      if (rects == NULL) 
++        {
++          g_warning ("Dirty rects, cannot allocate");
++          return; 
++        } 
++      for (i = 0; i < n_rectangles; ++i) 
++        {
++          rects[i].x1 = rectangles[i * 4];
++          rects[i].y1 = rectangles[i * 4 + 1];
++          rects[i].x2 = rects[i].x1 + rectangles[i * 4 + 2];
++          rects[i].y2 = rects[i].y1 + rectangles[i * 4 + 3];
++        } 
++      cmd.clips_ptr = (__u64)rects;
++      
++      fd = meta_gpu_kms_get_fd(secondary_gpu_state->gpu_kms);
++      ret = ioctl(fd, DRM_IOCTL_MODE_DIRTYFB, &cmd);
++      if (ret) 
++        g_warning("Dirty rects, ioctl failed %d", ret);
++      else 
++        g_info("Secondary GPU damage update, fb_id %d, rectangles %d", cmd.fb_id, cmd.num_clips); 
++    
++      free(rects);
++    }  
++} 
++ 
+ static void
+ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen *onscreen,
+                                                const int    *rectangles,
+@@ -2092,6 +2144,7 @@ meta_onscreen_native_swap_buffers_with_damage (CoglOnscreen *onscreen,
+     }
+ 
+   update_secondary_gpu_state_post_swap_buffers (onscreen, &egl_context_changed);
++  update_secondary_gpu_state_with_damage(onscreen_native->secondary_gpu_state, rectangles, n_rectangles);
+ 
+   /* If this is the first framebuffer to be presented then we now setup the
+    * crtc modes, else we flip from the previous buffer */

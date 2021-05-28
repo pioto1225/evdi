@@ -1,3 +1,89 @@
+# Framebuffer damage support (Gnome/Wayland)
+
+This is a simple demonstrator of damage tracking for DisplayLink. Damage tracking is a useful feature as it overall lowers CPU usage in desktop application scenario. DisplayLink's EVDI kernel driver (https://github.com/DisplayLink/evdi) and Gnome's Mutter (https://gitlab.gnome.org/GNOME/mutter) already implement most of the necessary functionality. Only a little bit of plumbing is missing to let Mutter pass damage information to the EVDI driver and the latter to work with it. 
+
+## Performance evaluation (glxgears)
+Ubuntu 20.04/Gnome Wayland/Intel i5-7300U/4K screen 125% zoom:
+
+Before the changes:
+![image](https://user-images.githubusercontent.com/32467004/120087077-dbeccf00-c0dc-11eb-95f6-8e7007184559.png)
+
+After the changes: 
+(screen copy times reduced from 2-4ms to less than 0.5ms, DisplayLink user-space driver CPU usage lower 13%):
+![image](https://user-images.githubusercontent.com/32467004/120087028-5a953c80-c0dc-11eb-8aa4-5246dea2c165.png)
+
+## Requirements
+* Gnome/Wayland with patched Mutter
+* Kernel > 5.X (requires DRM_IOCTL_MODE_DIRTYFB)
+* DisplayLink driver 5.4 with EVDI 1.9.1 (https://www.synaptics.com/products/displaylink-graphics/downloads/ubuntu)
+
+## Testing
+* Debian Bullseye 
+* Ubuntu 20.04
+
+## How to use
+
+1. Get DisplayLink screen(s) working.
+
+2. Update EVDI.
+
+   Uninstall EVDI.
+   ```
+   sudo dkms remove evdi/1.9.1
+   ```
+
+   Clone the repo and check out this branch.
+   ```
+   git clone https://github.com/pioto1225/evdi.git
+   cd evdi
+   git checkout dirty_rects
+   ```
+
+   Build and install the kernel driver.
+
+   ``` 
+   cd module
+   sudo dkms install .
+   ```
+
+3. Update Mutter (Debian Bullseye and Ubuntu 20.04).
+
+   Enable sources for apt.
+   ```
+   sudo vim /etc/apt/sources.list
+   # make sure it contains this line (Debian)
+   deb-src http://deb.debian.org/debian/ bullseye main contrib
+   # (Ubuntu 20.04)
+   deb-src http://gb.archive.ubuntu.com/ubuntu focal main restricted
+   ```
+
+   Get Mutter sources and patch them.
+   ```
+   sudo apt update
+   cd ../..
+   mkdir mutter && cd mutter
+   apt source mutter
+   sudo apt build-dep mutter
+   cd mutter-3.38.4/
+   patch -p1 < ../../evdi/mutter_patches/mutter3.38.4-1_debian_bullseye.patch
+   ```
+
+   For Ubuntu replace the last two lines with:
+   ```
+   cd mutter-3.36.1/
+   patch -p1 < ../../evdi/mutter_patches/mutter3.36.1_ubuntu20.04.patch
+   ```
+
+   Build and install Mutter.
+   ```
+   dpkg-buildpackage -b -uc -us -nc
+   cd ..
+   sudo dpkg -i *.deb
+   ```
+
+4. Reboot machine.
+     
+
 # Extensible Virtual Display Interface
 
 [![Build Status](https://travis-ci.org/DisplayLink/evdi.svg?branch=devel)](https://travis-ci.org/DisplayLink/evdi)
