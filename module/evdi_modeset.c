@@ -460,7 +460,7 @@ static int evdi_atomic_check(struct drm_device *dev,
 	int i;
 	struct evdi_device *evdi = dev->dev_private;
 
-	if (state->allow_modeset && evdi_painter_needs_full_modeset(evdi->painter)) {
+	if (evdi_painter_needs_full_modeset(evdi->painter)) {
 		for_each_new_crtc_in_state(state, crtc, crtc_state, i) {
 			crtc_state->active_changed = true;
 			crtc_state->mode_changed = true;
@@ -488,8 +488,8 @@ void evdi_modeset_init(struct drm_device *dev)
 	dev->mode_config.min_width = 64;
 	dev->mode_config.min_height = 64;
 
-	dev->mode_config.max_width = 3840;
-	dev->mode_config.max_height = 2160;
+	dev->mode_config.max_width = 7680;
+	dev->mode_config.max_height = 4320;
 
 	dev->mode_config.prefer_shadow = 0;
 	dev->mode_config.preferred_depth = 24;
