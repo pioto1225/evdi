@@ -1,3 +1,7 @@
+# Update (14 May 2022)
+For amdgpu please use upstream DisplayLink repository (https://github.com/DisplayLink/evdi). 
+This branch will be retired.
+
 # Extensible Virtual Display Interface
 
 For Gnome/Wayland please use upstream EVDI: https://github.com/DisplayLink/evdi
